@@ -1,38 +1,45 @@
 from pathlib import Path
-import numpy as np
 import torch
-import torchlens as tl
-from transformers import T5Tokenizer, T5ForConditionalGeneration
+import transformer_lens
+import transformers
 import argparse
+
+# For detailed logs (INFO level)
+transformers.logging.set_verbosity_info()
+
+# For the most detailed logs (DEBUG level)
+transformers.logging.set_verbosity_debug()
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--model_id', type=str, default='t5-small')
-parser.add_argument('--text', type=str, default='translate English to German: How are you?')
+parser.add_argument('--model_id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
+parser.add_argument('--text', type=str, default='An elephant is a')
+parser.add_argument('--device', type=str, default='cpu')
 
 args = parser.parse_args()
 
+model_id = args.model_id
 local_dir = Path('.') / 'models' / args.model_id
 text = args.text
+device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
-tokenizer = T5Tokenizer.from_pretrained(local_dir)
-model = T5ForConditionalGeneration.from_pretrained(local_dir)
-inputs = tokenizer(text, return_tensors="pt")
+# Load the model into hooked transformer
+tokenizer = transformers.AutoTokenizer.from_pretrained(local_dir)
+hf_model = transformers.AutoModelForCausalLM.from_pretrained(local_dir, device_map=device, low_cpu_mem_usage=True)
 
-decoder_start_token_id = model.config.decoder_start_token_id
-decoder_input_ids = torch.tensor([[decoder_start_token_id]])
+model = transformer_lens.HookedTransformer.from_pretrained(
+  model_id,
+  hf_model=hf_model,
+  device=device,
+  tokenizer=tokenizer
+)
+model = model.to(device if torch.cuda.is_available() else "cpu")
 
-model_history = tl.log_forward_pass(model, inputs.input_ids,
-									layers_to_save='all',
-									vis_opt='none',
-									input_kwargs={'decoder_input_ids': decoder_input_ids})
-# Example usage
-# print(model_history.layer_labels)
-# print(model_history[output_1].tensor_contents)
+# Run model with transformer_lens
+logits, activations = model.run_with_cache(text)
 
-# save the model history to a file using numpy
-saved_object = {}
-saved_object['layer_labels'] = model_history.layer_labels
-for layer_label in model_history.layer_labels:
-	saved_object[layer_label] = model_history[layer_label].tensor_contents
-np.save(local_dir / 'model_history.npy', saved_object)
+print(logits, activations)
+
+# save the model history to files
+torch.save(logits, local_dir / 'logits.pt')
+torch.save(activations, local_dir / 'activations.pt')
