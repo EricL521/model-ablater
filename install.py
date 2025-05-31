@@ -4,7 +4,7 @@ from pathlib import Path
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--model_id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
+parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
 
 args = parser.parse_args()
 
