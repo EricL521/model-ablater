@@ -1,7 +1,6 @@
 from pathlib import Path
 import torch
 import argparse
-from PIL import Image
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
@@ -67,4 +66,38 @@ print(output_tokens)
 # ['The', 'Ġoverview', "'s", 'Ġa', 'Ġlarge', '3']
 
 # Use activations to generate an image
-image = Image.new('RGB', (512, 512))
+from PIL import Image
+import os
+# Generate images, one for each layer
+images = {}
+# hook_resid_pre, ln1.hook_normalized
+# attn.hook_q, attn.hook_k, attn.hook_v, attn.hook_rot_q, attn.hook_rot_k, attn.hook_pattern, attn.hook_z, hook_attn_out
+# ln2.hook_normalized, mlp.hook_pre_linear, mlp.hook_post, hook_mlp_out, hook_resid_post
+SHOWN_LAYERS = {
+	"hook_resid_pre", "ln1.hook_normalized",
+	"attn.hook_q", "attn.hook_k", "attn.hook_v", "attn.hook_rot_q", "attn.hook_rot_k", "attn.hook_pattern", "attn.hook_z", "hook_attn_out",
+	"ln2.hook_normalized", "mlp.hook_pre_linear", "mlp.hook_post", "hook_mlp_out", "hook_resid_post",
+}
+for key in activations.keys():
+	if not any(layer in key for layer in SHOWN_LAYERS):
+		continue
+	numpy_activations = activations[key].detach().cpu().numpy()
+	# Normalize the activations to [0, 255] for image representation
+	norm_activations = (numpy_activations - numpy_activations.min()) / (numpy_activations.max() - numpy_activations.min())
+	norm_activations = (norm_activations * 255).astype('uint8')
+	# Convert to image
+	if norm_activations.ndim == 3:
+		norm_activations = norm_activations.reshape(norm_activations.shape[1], norm_activations.shape[2])
+	elif norm_activations.ndim == 4:
+		# if 4D, we are in a multi-head attention context
+		# We will combine the heads side by side, i.e. (6, 24, 128) -> (6 * 24, 128)
+		norm_activations = norm_activations.reshape(norm_activations.shape[1] * norm_activations.shape[2], norm_activations.shape[3])
+	image = Image.fromarray(norm_activations, mode='L')
+	# rotate the image 90 degrees
+	image = image.transpose(Image.ROTATE_90)
+	images[key] = image
+
+# Save images
+os.makedirs(local_dir / 'layers', exist_ok=True)
+for key, image in images.items():
+	image.save(local_dir / 'layers' / f"{key}.png")
