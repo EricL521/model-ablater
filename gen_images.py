@@ -68,6 +68,7 @@ print(output_tokens)
 # Use activations to generate an image
 from PIL import Image
 import os
+import numpy as np
 # Generate images, one for each layer
 images = {}
 # hook_resid_pre, ln1.hook_normalized
@@ -84,20 +85,29 @@ for key in activations.keys():
 	numpy_activations = activations[key].detach().cpu().numpy()
 	# Normalize the activations to [0, 255] for image representation
 	norm_activations = (numpy_activations - numpy_activations.min()) / (numpy_activations.max() - numpy_activations.min())
-	norm_activations = (norm_activations * 255).astype('uint8')
+	norm_activations = 255 - (norm_activations * 255).astype('uint8')
 	# Convert to image
 	if norm_activations.ndim == 3:
-		norm_activations = norm_activations.reshape(norm_activations.shape[1], norm_activations.shape[2])
+		reshaped_norm_activations = norm_activations.reshape(norm_activations.shape[1], norm_activations.shape[2])
+		# insert empty row between each row to make it more readable
+		spaced_norm_activations = np.full((reshaped_norm_activations.shape[0] * 2 - 1, reshaped_norm_activations.shape[1]), 255, dtype='uint8')
+		spaced_norm_activations[::2] = reshaped_norm_activations
+		# convert to image
+		image = Image.fromarray(spaced_norm_activations, mode='L')
 	elif norm_activations.ndim == 4:
 		# if 4D, we are in a multi-head attention context
 		# We will combine the heads side by side, i.e. (6, 24, 128) -> (6 * 24, 128)
-		norm_activations = norm_activations.reshape(norm_activations.shape[1] * norm_activations.shape[2], norm_activations.shape[3])
-	image = Image.fromarray(norm_activations, mode='L')
-	# rotate the image 90 degrees
-	image = image.transpose(Image.ROTATE_90)
+		reshaped_norm_activations = norm_activations.reshape(norm_activations.shape[1] * norm_activations.shape[2], norm_activations.shape[3])
+		# insert empty row between each block to make it more readable
+		insert_indices = (np.arange(1, reshaped_norm_activations.shape[0] // norm_activations.shape[2])) * norm_activations.shape[2]
+		spaced_norm_activations = np.insert(reshaped_norm_activations, insert_indices, 255, axis=0)
+		# convert to image
+		image = Image.fromarray(spaced_norm_activations, mode='L')
+	# save image
 	images[key] = image
 
 # Save images
 os.makedirs(local_dir / 'layers', exist_ok=True)
 for key, image in images.items():
 	image.save(local_dir / 'layers' / f"{key}.png")
+
