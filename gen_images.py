@@ -71,40 +71,50 @@ import os
 import numpy as np
 # Generate images, one for each layer
 images = {}
-# hook_resid_pre, ln1.hook_normalized
-# attn.hook_q, attn.hook_k, attn.hook_v, attn.hook_rot_q, attn.hook_rot_k, attn.hook_pattern, attn.hook_z, hook_attn_out
-# ln2.hook_normalized, mlp.hook_pre_linear, mlp.hook_post, hook_mlp_out, hook_resid_post
+# Define which layers to show
 SHOWN_LAYERS = {
-	"hook_resid_pre", "ln1.hook_normalized",
+	"ln1.hook_normalized",
 	"attn.hook_q", "attn.hook_k", "attn.hook_v", "attn.hook_rot_q", "attn.hook_rot_k", "attn.hook_pattern", "attn.hook_z", "hook_attn_out",
 	"ln2.hook_normalized", "mlp.hook_pre_linear", "mlp.hook_post", "hook_mlp_out", "hook_resid_post",
 }
+SPACING_ALPHA = 200  # how bright spacing is between rows in the image
+index = 0
 for key in activations.keys():
-	if not any(layer in key for layer in SHOWN_LAYERS):
+	if not '.'.join(key.split('.')[2::]) in SHOWN_LAYERS:
 		continue
 	numpy_activations = activations[key].detach().cpu().numpy()
-	# Normalize the activations to [0, 255] for image representation
-	norm_activations = (numpy_activations - numpy_activations.min()) / (numpy_activations.max() - numpy_activations.min())
-	norm_activations = 255 - (norm_activations * 255).astype('uint8')
+	# Normalize the activations to [-255, 255] for image representation, with 0 mapped to 0
+	norm_activations = numpy_activations / np.max(np.abs(numpy_activations)) * 255
 	# Convert to image
 	if norm_activations.ndim == 3:
 		reshaped_norm_activations = norm_activations.reshape(norm_activations.shape[1], norm_activations.shape[2])
+		# Make negative values red and positive values green (NOTE: green is 255*value, red is just value)
+		colored_reshaped_norm_activations = np.zeros((reshaped_norm_activations.shape[0], reshaped_norm_activations.shape[1], 3), dtype='uint8')
+		# Red channel is 255 for all negative values, green channel is 255 for all positive values, and the other two scale with magnitude
+		colored_reshaped_norm_activations[:, :, 0] = np.where(reshaped_norm_activations < 0, 255, 255 - reshaped_norm_activations)
+		colored_reshaped_norm_activations[:, :, 1] = np.where(reshaped_norm_activations > 0, 255, 255 + reshaped_norm_activations)
+		colored_reshaped_norm_activations[:, :, 2] = 255 - np.abs(reshaped_norm_activations)
 		# insert empty row between each row to make it more readable
-		spaced_norm_activations = np.full((reshaped_norm_activations.shape[0] * 2 - 1, reshaped_norm_activations.shape[1]), 255, dtype='uint8')
-		spaced_norm_activations[::2] = reshaped_norm_activations
+		spaced_colored_reshaped_norm_activations = np.insert(colored_reshaped_norm_activations, np.arange(1, colored_reshaped_norm_activations.shape[0]), SPACING_ALPHA, axis=0)
 		# convert to image
-		image = Image.fromarray(spaced_norm_activations, mode='L')
+		image = Image.fromarray(spaced_colored_reshaped_norm_activations, mode='RGB')
 	elif norm_activations.ndim == 4:
 		# if 4D, we are in a multi-head attention context
 		# We will combine the heads side by side, i.e. (6, 24, 128) -> (6 * 24, 128)
 		reshaped_norm_activations = norm_activations.reshape(norm_activations.shape[1] * norm_activations.shape[2], norm_activations.shape[3])
+		# Make negative values red and positive values green (NOTE: green is 255*value, red is just value)
+		colored_reshaped_norm_activations = np.zeros((reshaped_norm_activations.shape[0], reshaped_norm_activations.shape[1], 3), dtype='uint8')
+		# Red channel is 255 for all negative values, green channel is 255 for all positive values, and the other two scale with magnitude
+		colored_reshaped_norm_activations[:, :, 0] = np.where(reshaped_norm_activations < 0, 255, 255 - reshaped_norm_activations)
+		colored_reshaped_norm_activations[:, :, 1] = np.where(reshaped_norm_activations > 0, 255, 255 + reshaped_norm_activations)
+		colored_reshaped_norm_activations[:, :, 2] = 255 - np.abs(reshaped_norm_activations)
 		# insert empty row between each block to make it more readable
-		insert_indices = (np.arange(1, reshaped_norm_activations.shape[0] // norm_activations.shape[2])) * norm_activations.shape[2]
-		spaced_norm_activations = np.insert(reshaped_norm_activations, insert_indices, 255, axis=0)
+		spaced_colored_reshaped_norm_activations = np.insert(colored_reshaped_norm_activations, np.arange(1, reshaped_norm_activations.shape[0] // norm_activations.shape[2]) * norm_activations.shape[2], SPACING_ALPHA, axis=0)
 		# convert to image
-		image = Image.fromarray(spaced_norm_activations, mode='L')
+		image = Image.fromarray(spaced_colored_reshaped_norm_activations, mode='RGB')
 	# save image
-	images[key] = image
+	images[str(index) + "_" + key] = image
+	index += 1
 
 # Save images
 os.makedirs(local_dir / 'layers', exist_ok=True)
