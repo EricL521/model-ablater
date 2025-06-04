@@ -50,24 +50,18 @@ model = model.to(device if torch.cuda.is_available() else "cpu")
 
 # Neurons that are more strongly related (larger weight^2) should be closer together in generated images
 import numpy as np
+from helper_functions.apply_mapping import apply_mapping
 SHOWN_LAYER_WEIGHTS = {
 	"attn.W_Q": ("attn.hook_q", "prev.mlp.W_out"), 
 	"attn._W_K": ("attn.hook_k", "prev.mlp.W_out"),
 	"attn._W_V": ("attn.hook_v", "prev.mlp.W_out"),
 	"attn.W_O": ("hook_attn_out", "current.attn.hook_v"),
-	"mlp.W_in": ("mlp.hook_pre_linear", "current.hook_attn_out"), 
+	"mlp.W_in": ("mlp.hook_pre_linear", "prev.mlp.hook_post"), 
 	"mlp.W_out": ("mlp.hook_post", "current.mlp.hook_pre_linear"),
 }
 # Format of a mapping is [[old index -> new index]]
 # Format of mappings is {layer name -> mapping}
 mappings = {}
-# returns a new tensor with indices applied according to the mapping
-def apply_mapping(np_array, mapping):
-	new_array = np.zeros_like(np_array)
-	for i in range(mapping.shape[0]):
-		for j in range(mapping.shape[1]):
-			new_array[i, mapping[i, j]] = np_array[i, j]
-	return new_array
 def gen_mappings(in_weights=None, out_weights=None, prev_layer_mapping=None):
 	if (in_weights is None and out_weights is None) or (in_weights is not None and out_weights is not None):
 		raise ValueError("Exactly one of in_weights or out_weights should be provided.")
@@ -93,11 +87,11 @@ for key in model.state_dict().keys():
 	prev_layer_mapping_id = SHOWN_LAYER_WEIGHTS[layer_name][1]\
 		.replace('current', '.'.join(layer_num_array))\
 		.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
-	mappings['.'.join('.'.join(layer_num_array) + SHOWN_LAYER_WEIGHTS[layer_name][0])] = gen_mappings(
+	mappings['.'.join(['.'.join(layer_num_array), SHOWN_LAYER_WEIGHTS[layer_name][0]])] = gen_mappings(
 		in_weights=model.state_dict()[key].detach().cpu().numpy(),
 		prev_layer_mapping=mappings.get(prev_layer_mapping_id, None)
 	)
 
 # save mappings to a file using numpy
 mappings_file = local_dir / 'mappings'
-np.savez(mappings_file, mappings)
+np.savez(mappings_file, **mappings)
