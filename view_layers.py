@@ -6,17 +6,28 @@ from PIL import Image, ImageTk
 import os
 import re
 import numpy as np
+import torch
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
+parser.add_argument('--show-activation', action=argparse.BooleanOptionalAction, default=True)
 args = parser.parse_args()
 model_id = args.model_id
+show_activation = args.show_activation
 local_dir = Path('.') / 'models' / model_id
 
 print("model_id:", model_id)
 
 # Show layers
 LAYER_FOLDER = local_dir / 'layers'
+
+# Load activations if needed
+activations = None
+if show_activation:
+	try:
+		activations = torch.load(local_dir / 'activations.pt', weights_only=False)
+	except Exception as e:
+		print(f"Warning: Could not load activations.pt: {e}")
 
 class LayerViewer:
 	def __init__(self, root, layer_folder):
@@ -116,6 +127,9 @@ class LayerViewer:
 
 		# Bind resize event
 		self.canvas.bind("<Configure>", self.on_window_resize)
+
+		self.show_activation = show_activation
+		self.activations = activations
 
 		if self.layer_files:
 			self.show_current_layer()
@@ -367,7 +381,54 @@ class LayerViewer:
 		image_y = int(np.floor((mouse_y - self.pan_y) / self.zoom_level))
 		# Clamp to image bounds
 		if 0 <= image_x < self.current_image.width and 0 <= image_y < self.current_image.height:
-			self.pixel_info_label.config(text=f"Pixel: ({image_x}, {image_y})")
+			info = ""
+			if self.show_activation and self.activations is not None:
+				try:
+					layer_file = self.layer_files[self.current_index]
+					idx_and_key = os.path.splitext(layer_file)[0]
+					idx, key = idx_and_key.split('_', 1)
+					act = self.activations[key]
+					act_np = act.detach().cpu().numpy()
+					if act_np.shape[0] == 1:
+						act_np = act_np[0]
+					value = None
+					is_spacing_row = False
+					index_tuple = None
+					if act_np.ndim == 2:
+						# 2D: (tokens, d_model)
+						n_rows = act_np.shape[0]
+						if image_y % 2 == 1:
+							is_spacing_row = True
+							index_tuple = "(spacing)"
+						else:
+							act_row = image_y // 2
+							if act_row < act_np.shape[0] and image_x < act_np.shape[1]:
+								value = act_np[act_row, image_x]
+							index_tuple = f"({act_row}, {image_x})"
+					elif act_np.ndim == 3:
+						# 3D: (tokens, heads, d_head)
+						t, h, d = act_np.shape
+						block = h
+						block_idx = image_y // (block + 1)
+						in_block_idx = image_y % (block + 1)
+						if in_block_idx == block:
+							is_spacing_row = True
+							index_tuple = "(spacing)"
+						else:
+							act_row = block_idx
+							act_head = in_block_idx
+							if act_row < t and act_head < h and image_x < d:
+								value = act_np[act_row, act_head, image_x]
+							index_tuple = f"({act_row}, {act_head}, {image_x})"
+					if is_spacing_row:
+						info = f"{index_tuple} | (spacing row)"
+					elif value is not None:
+						info = f"{index_tuple} | Value: {value:.4f}"
+					else:
+						info = f"{index_tuple} | Value: N/A"
+				except Exception as e:
+					info = f"Error: {e}"
+			self.pixel_info_label.config(text=info)
 		else:
 			self.pixel_info_label.config(text="")
 
