@@ -421,7 +421,7 @@ class LayerViewer:
 								value = act_np[act_row, act_head, image_x]
 							index_tuple = f"({act_row}, {act_head}, {image_x})"
 					if is_spacing_row:
-						info = f"{index_tuple} | (spacing row)"
+						info = f"{index_tuple}"
 					elif value is not None:
 						info = f"{index_tuple} | Value: {value:.4f}"
 					else:
