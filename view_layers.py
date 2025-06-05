@@ -113,10 +113,10 @@ class LayerViewer:
 		
 		# Wait for canvas to be ready before showing first layer
 		self.root.update_idletasks()
-  
+
 		# Bind resize event
 		self.canvas.bind("<Configure>", self.on_window_resize)
-  
+
 		if self.layer_files:
 			self.show_current_layer()
 		else:
@@ -125,35 +125,29 @@ class LayerViewer:
 	def on_window_resize(self, event):
 		canvas_width = self.canvas.winfo_width()
 		canvas_height = self.canvas.winfo_height()
-		center_x = 0
-		center_y = 0
-  
+
 		# Initialize last canvas size if not present
 		if not hasattr(self, 'last_canvas_width') or not hasattr(self, 'last_canvas_height'):
 			self.last_canvas_width = canvas_width
 			self.last_canvas_height = canvas_height
 
 		if self.current_image and self.last_canvas_width > 0 and self.last_canvas_height > 0:
-			# Get the image coordinates at the center of the canvas before resize
-			image_cx = (center_x - self.pan_x) / self.zoom_level
-			image_cy = (center_y - self.pan_y) / self.zoom_level
-
 			# Calculate scale factors
 			scale_x = canvas_width / self.last_canvas_width
 			scale_y = canvas_height / self.last_canvas_height
 			scale = (scale_x * scale_y) ** 0.5
 
-			# Update zoom_level proportionally
-			self.zoom_level *= scale
-
 			# Adjust pan_x and pan_y so the same image point stays at the center
-			self.pan_x = center_x - image_cx * self.zoom_level
-			self.pan_y = center_y - image_cy * self.zoom_level
+			self.pan_x *= scale
+			self.pan_y *= scale
+
+	 		# Update zoom_level proportionally
+			self.zoom_level *= scale
 
 		# Update last canvas size
 		self.last_canvas_width = canvas_width
 		self.last_canvas_height = canvas_height
-
+		
 		self.show_current_layer()
 	
 	def start_pan(self, event):
@@ -200,7 +194,7 @@ class LayerViewer:
 			return
 			
 		layer_path = os.path.join(LAYER_FOLDER, self.layer_files[self.current_index])
-  
+	
 		# Only load the image if it's different from the current one
 		if layer_path != self.current_image_path:
 			try:
@@ -239,7 +233,7 @@ class LayerViewer:
 				return
 		
 		try:
-   		# Get layer name (remove number prefix)
+	 		# Get layer name (remove number prefix)
 			layer_name = self.layer_files[self.current_index]
 			if '_' in layer_name:
 				layer_name = layer_name.split('_', 1)[1]  # Remove everything before first underscore
@@ -256,10 +250,10 @@ class LayerViewer:
 			# Update cache with current settings
 			dim_key = (self.current_image.width, self.current_image.height)
 			self.dimension_cache[dim_key] = (self.zoom_level, self.pan_x, self.pan_y)
-   
+	 
 			# Clear canvas
 			self.canvas.delete("all")
-   
+	 
 			# Get visible area
 			canvas_width = self.canvas.winfo_width()
 			canvas_height = self.canvas.winfo_height()
@@ -269,7 +263,7 @@ class LayerViewer:
 			visible_top = max(0, -self.pan_y / self.zoom_level - self.buffer)
 			visible_right = min(self.current_image.width, (canvas_width - self.pan_x) / self.zoom_level + self.buffer)
 			visible_bottom = min(self.current_image.height, (canvas_height - self.pan_y) / self.zoom_level + self.buffer)
-   
+	 
 			# Ensure coordinates are valid (left < right, top < bottom), if not, then don't show anything
 			if visible_left >= visible_right or visible_top >= visible_bottom:
 				return
@@ -285,8 +279,8 @@ class LayerViewer:
 			# Calculate new size for visible region
 			new_width = int(visible_region.width * self.zoom_level)
 			new_height = int(visible_region.height * self.zoom_level)
-   
-   		# Calculate image position with buffer offset
+	 
+	 		# Calculate image position with buffer offset
 			x = max(self.pan_x % self.zoom_level - self.zoom_level - int(self.buffer * self.zoom_level), self.pan_x)
 			y = max(self.pan_y % self.zoom_level - self.zoom_level - int(self.buffer * self.zoom_level), self.pan_y)
 			
@@ -297,8 +291,8 @@ class LayerViewer:
 				x + new_width + border_size, y + new_height + border_size,
 				outline='#333333', width=border_size
 			)
-   
-   		# If new width or height is 0, then only show the border
+	 
+	 		# If new width or height is 0, then only show the border
 			if new_width == 0 or new_height == 0:
 				return
 			
