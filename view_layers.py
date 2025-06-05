@@ -5,6 +5,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 import os
 import re
+import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
@@ -39,6 +40,7 @@ class LayerViewer:
 		self.is_panning = False
 		self.last_x = 0
 		self.last_y = 0
+		self.buffer = 1  # pixels of buffer
 		
 		# Image caching
 		self.current_image = None
@@ -57,6 +59,10 @@ class LayerViewer:
 		# Create main frame
 		self.main_frame = ttk.Frame(root)
 		self.main_frame.pack(fill=tk.BOTH, expand=True)
+		
+		# Add image title label at the top
+		self.title_label = ttk.Label(self.main_frame, text="", font=("TkDefaultFont", 14, "bold"))
+		self.title_label.pack(fill=tk.X, pady=(5, 0))
 		
 		# Create canvas for image display
 		self.canvas = tk.Canvas(self.main_frame)
@@ -81,6 +87,10 @@ class LayerViewer:
 		self.status_label = ttk.Label(self.main_frame, text="")
 		self.status_label.pack(fill=tk.X, pady=5)
 		
+		# Add pixel info label at the very bottom
+		self.pixel_info_label = ttk.Label(self.main_frame, text="", anchor="w")
+		self.pixel_info_label.pack(fill=tk.X, pady=(0, 5))
+		
 		# Bind mouse events
 		self.canvas.bind("<MouseWheel>", self.zoom)  # Windows
 		self.canvas.bind("<Button-4>", self.zoom)    # Linux scroll up
@@ -88,6 +98,7 @@ class LayerViewer:
 		self.canvas.bind("<ButtonPress-1>", self.start_pan)
 		self.canvas.bind("<ButtonRelease-1>", self.stop_pan)
 		self.canvas.bind("<B1-Motion>", self.pan)
+		self.canvas.bind("<Motion>", self.update_pixel_info)
 		
 		# Bind arrow keys
 		self.root.bind("<Left>", lambda e: self.show_previous())
@@ -204,10 +215,13 @@ class LayerViewer:
 			if '_' in layer_name:
 				layer_name = layer_name.split('_', 1)[1]  # Remove everything before first underscore
 			layer_name = os.path.splitext(layer_name)[0]  # Remove extension
-			
+
+			# Update image title at the top
+			self.title_label.config(text=layer_name)
+
 			# Update status
 			self.status_label.config(
-				text=f"Layer {self.current_index + 1} of {len(self.layer_files)} | {layer_name} | Zoom: {self.zoom_level:.2f}x | Size: {self.current_image.width}x{self.current_image.height}"
+				text=f"Layer {self.current_index + 1} of {len(self.layer_files)} | Zoom: {self.zoom_level:.2f}x | Size: {self.current_image.width}x{self.current_image.height}"
 			)
 			
 			# Update cache with current settings
@@ -221,14 +235,11 @@ class LayerViewer:
 			canvas_width = self.canvas.winfo_width()
 			canvas_height = self.canvas.winfo_height()
 			
-			# Add buffer zone to prevent edge artifacts
-			buffer = 1  # pixels of buffer per zoom level
-			
 			# Calculate visible region in original image coordinates with buffer
-			visible_left = max(0, -self.pan_x / self.zoom_level - buffer)
-			visible_top = max(0, -self.pan_y / self.zoom_level - buffer)
-			visible_right = min(self.current_image.width, (canvas_width - self.pan_x) / self.zoom_level + buffer)
-			visible_bottom = min(self.current_image.height, (canvas_height - self.pan_y) / self.zoom_level + buffer)
+			visible_left = max(0, -self.pan_x / self.zoom_level - self.buffer)
+			visible_top = max(0, -self.pan_y / self.zoom_level - self.buffer)
+			visible_right = min(self.current_image.width, (canvas_width - self.pan_x) / self.zoom_level + self.buffer)
+			visible_bottom = min(self.current_image.height, (canvas_height - self.pan_y) / self.zoom_level + self.buffer)
    
 			# Ensure coordinates are valid (left < right, top < bottom), if not, then don't show anything
 			if visible_left >= visible_right or visible_top >= visible_bottom:
@@ -247,8 +258,8 @@ class LayerViewer:
 			new_height = int(visible_region.height * self.zoom_level)
    
    		# Calculate image position with buffer offset
-			x = max(self.pan_x % self.zoom_level - int(buffer * self.zoom_level), self.pan_x + int(buffer * self.zoom_level))
-			y = max(self.pan_y % self.zoom_level - int(buffer * self.zoom_level), self.pan_y + int(buffer * self.zoom_level))
+			x = max(self.pan_x % self.zoom_level - self.zoom_level - int(self.buffer * self.zoom_level), self.pan_x)
+			y = max(self.pan_y % self.zoom_level - self.zoom_level - int(self.buffer * self.zoom_level), self.pan_y)
 			
 			# Draw black border around the image
 			border_size = 1
@@ -320,6 +331,22 @@ class LayerViewer:
 		
 		# Schedule next scroll
 		self.root.after(self.scroll_interval, self.continuous_scroll)
+
+	def update_pixel_info(self, event):
+		if not self.current_image:
+			self.pixel_info_label.config(text="")
+			return
+		# Get mouse position relative to canvas
+		mouse_x = self.canvas.canvasx(event.x)
+		mouse_y = self.canvas.canvasy(event.y)
+		# Convert to image coordinates
+		image_x = int(np.floor((mouse_x - self.pan_x) / self.zoom_level))
+		image_y = int(np.floor((mouse_y - self.pan_y) / self.zoom_level))
+		# Clamp to image bounds
+		if 0 <= image_x < self.current_image.width and 0 <= image_y < self.current_image.height:
+			self.pixel_info_label.config(text=f"Pixel: ({image_x}, {image_y})")
+		else:
+			self.pixel_info_label.config(text="")
 
 if __name__ == "__main__":
 	root = tk.Tk()
