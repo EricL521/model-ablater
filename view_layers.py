@@ -115,7 +115,7 @@ class LayerViewer:
 		self.root.update_idletasks()
   
 		# Bind resize event
-		self.root.bind("<Configure>", self.on_window_resize)
+		self.canvas.bind("<Configure>", self.on_window_resize)
   
 		if self.layer_files:
 			self.show_current_layer()
@@ -123,9 +123,38 @@ class LayerViewer:
 			self.status_label.config(text="No layers found in the folder")
 	
 	def on_window_resize(self, event):
-		# Only handle main window resize events
-		if event.widget == self.root:
-			self.show_current_layer()
+		canvas_width = self.canvas.winfo_width()
+		canvas_height = self.canvas.winfo_height()
+		center_x = 0
+		center_y = 0
+  
+		# Initialize last canvas size if not present
+		if not hasattr(self, 'last_canvas_width') or not hasattr(self, 'last_canvas_height'):
+			self.last_canvas_width = canvas_width
+			self.last_canvas_height = canvas_height
+
+		if self.current_image and self.last_canvas_width > 0 and self.last_canvas_height > 0:
+			# Get the image coordinates at the center of the canvas before resize
+			image_cx = (center_x - self.pan_x) / self.zoom_level
+			image_cy = (center_y - self.pan_y) / self.zoom_level
+
+			# Calculate scale factors
+			scale_x = canvas_width / self.last_canvas_width
+			scale_y = canvas_height / self.last_canvas_height
+			scale = (scale_x * scale_y) ** 0.5
+
+			# Update zoom_level proportionally
+			self.zoom_level *= scale
+
+			# Adjust pan_x and pan_y so the same image point stays at the center
+			self.pan_x = center_x - image_cx * self.zoom_level
+			self.pan_y = center_y - image_cy * self.zoom_level
+
+		# Update last canvas size
+		self.last_canvas_width = canvas_width
+		self.last_canvas_height = canvas_height
+
+		self.show_current_layer()
 	
 	def start_pan(self, event):
 		self.is_panning = True
