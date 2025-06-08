@@ -410,11 +410,6 @@ class LayerViewer:
 					act_np = act.detach().cpu().numpy()
 					if act_np.shape[0] == 1:
 						act_np = act_np[0]
-					if do_mapping:
-						shown_layer_key = key if key in SHOWN_LAYERS else layer_name
-						mapping = self.mappings.get(shown_layer_key, None)
-						if mapping is not None:
-							act_np = apply_mapping(act_np, mapping)
 					
 					# Calculate width of this layer's visualization
 					if act_np.ndim == 2:
@@ -440,9 +435,20 @@ class LayerViewer:
 					info = f"Layer: {current_layer}"
 					# Get activation for this layer
 					act = self.activations[current_layer]
-					act_np = act.detach().cpu().numpy()
+					act_np = act.detach().cpu().numpy().copy()
 					if act_np.shape[0] == 1:
 						act_np = act_np[0]
+					if do_mapping:
+						mapping_id = None
+						shown_layer_key = key if key in SHOWN_LAYERS else layer_name
+						if isinstance(SHOWN_LAYERS[shown_layer_key], str):
+							mapping_id = SHOWN_LAYERS[shown_layer_key]\
+								.replace('current', '.'.join(layer_num_array))\
+								.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
+						mapping = self.mappings.get(mapping_id, None)
+						if mapping is not None:
+							for i in range(act_np.shape[0]):
+								act_np[i] = apply_mapping(act_np[i], mapping)
      
 					# Calculate position within the layer
 					layer_start_x = layer_width - 1

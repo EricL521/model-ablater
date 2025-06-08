@@ -55,7 +55,7 @@ SHOWN_LAYER_WEIGHTS = {
 	"attn.W_Q": ("attn.hook_q", None), 
 	"attn._W_K": ("attn.hook_k", None),
 	"attn._W_V": ("attn.hook_v", None),
-	"mlp.W_in": ("mlp.hook_pre_linear", None), 
+	"mlp.W_in": ("mlp.hook_pre", None), 
 }
 # Format of a mapping is [[old index -> new index]]
 # Format of mappings is {layer name -> mapping}

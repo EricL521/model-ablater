@@ -98,7 +98,6 @@ for key in activations.keys():
 				.replace('current', '.'.join(layer_num_array))\
 				.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
 		last_mapping = MAPPINGS.get(mapping_id, None)
-		# Apply mapping if at least one dimension from numpy_activations matches the mapping
 		if last_mapping is not None:
 			print(f"Applying mapping of shape {last_mapping.shape} to activation of shape {numpy_activations.shape}")
 			for i in range(numpy_activations.shape[0]):
