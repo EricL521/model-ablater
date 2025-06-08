@@ -86,14 +86,15 @@ if do_mapping:
 for key in activations.keys():
 	layer_num_array = key.split('.')[:2:]
 	layer_name = '.'.join(key.split('.')[2::])
-	if not layer_name in SHOWN_LAYERS:
+	if not (layer_name in SHOWN_LAYERS or key in SHOWN_LAYERS):
 		continue
 	print(f"Processing layer: ({key})")
 	numpy_activations = activations[key].detach().cpu().numpy()[0]
 	if do_mapping:
 		mapping_id = None
-		if isinstance(SHOWN_LAYERS[layer_name], str):
-			mapping_id = SHOWN_LAYERS[layer_name]\
+		shown_layer_key = key if key in SHOWN_LAYERS else layer_name
+		if isinstance(SHOWN_LAYERS[shown_layer_key], str):
+			mapping_id = SHOWN_LAYERS[shown_layer_key]\
 				.replace('current', '.'.join(layer_num_array))\
 				.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
 		last_mapping = MAPPINGS.get(mapping_id, None)

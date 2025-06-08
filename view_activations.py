@@ -403,7 +403,7 @@ class LayerViewer:
 				for key in self.activations.keys():
 					layer_num_array = key.split('.')[:2:]
 					layer_name = '.'.join(key.split('.')[2::])
-					if not layer_name in SHOWN_LAYERS:
+					if not (layer_name in SHOWN_LAYERS or key in SHOWN_LAYERS):
 						continue
 					# Get activation shape for this layer
 					act = self.activations[key]
@@ -411,7 +411,8 @@ class LayerViewer:
 					if act_np.shape[0] == 1:
 						act_np = act_np[0]
 					if do_mapping:
-						mapping = self.mappings.get(layer_name, None)
+						shown_layer_key = key if key in SHOWN_LAYERS else layer_name
+						mapping = self.mappings.get(shown_layer_key, None)
 						if mapping is not None:
 							act_np = apply_mapping(act_np, mapping)
 					

@@ -14,4 +14,5 @@ SHOWN_LAYERS = {
 	"mlp.hook_post": "current.mlp.hook_pre_linear", 
 	"hook_mlp_out": None, 
 	"hook_resid_post": None,
+	"ln_final.hook_normalized": None,
 }
