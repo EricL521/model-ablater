@@ -114,7 +114,9 @@ for key in activations.keys():
 			numpy_activations[i] = apply_mapping(numpy_activations[i], last_mapping)
 	
 	# Normalize the activations to [-255, 255] for image representation, with 0 mapped to 0
-	norm_activations = numpy_activations / np.max(np.abs(numpy_activations)) * 255
+	norm_activations = np.zeros_like(numpy_activations)
+	for i in range(numpy_activations.shape[0]):
+		norm_activations[i] = numpy_activations[i] / np.max(np.abs(numpy_activations[i])) * 255
 	# Convert to image
 	if norm_activations.ndim == 2:
 		reshaped_norm_activations = norm_activations.reshape(norm_activations.shape[0], norm_activations.shape[1])

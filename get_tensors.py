@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
 # --no-calc or --calc (default)
 parser.add_argument('--calc', action=argparse.BooleanOptionalAction, default=True)
-parser.add_argument('--text', type=str, default='an elephant is a ')
+parser.add_argument('--text', type=str, default='An elephant is a large')
 parser.add_argument('--device', type=str, default='cpu')
 
 args = parser.parse_args()
@@ -77,7 +77,8 @@ model = model.to(device if torch.cuda.is_available() else "cpu")
 
 # Run model with transformer_lens
 if do_calc:
-  logits, activations = model.run_with_cache(text)
+  tokens = model.to_tokens(text)
+  logits, activations = model.run_with_cache(tokens)
 
   print(logits, activations)
 
