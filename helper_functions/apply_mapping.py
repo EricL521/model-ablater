@@ -9,7 +9,7 @@ def apply_mapping(np_array, mapping):
 			new_array[mapping[0, j]] = np_array[j]
 		return new_array
 	# there is more than one mapping, and it is an attention layer
-	for i in range(mapping.shape[0]):
-		for j in range(mapping.shape[1]):
-			new_array[i, mapping[i, j]] = np_array[i, j]
+	for i in range(np_array.shape[0]):
+		for j in range(np_array.shape[1]):
+			new_array[i, mapping[i // (np_array.shape[0] // mapping.shape[0]), j]] = np_array[i, j]
 	return new_array

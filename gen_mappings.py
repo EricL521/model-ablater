@@ -55,9 +55,7 @@ SHOWN_LAYER_WEIGHTS = {
 	"attn.W_Q": ("attn.hook_q", "prev.mlp.W_out"), 
 	"attn._W_K": ("attn.hook_k", "prev.mlp.W_out"),
 	"attn._W_V": ("attn.hook_v", "prev.mlp.W_out"),
-	"attn.W_O": ("hook_attn_out", "current.attn.hook_v"),
-	"mlp.W_in": ("mlp.hook_pre_linear", "prev.mlp.hook_post"), 
-	"mlp.W_out": ("mlp.hook_post", "current.mlp.hook_pre_linear"),
+	"mlp.W_in": ("mlp.hook_pre_linear", None), 
 }
 # Format of a mapping is [[old index -> new index]]
 # Format of mappings is {layer name -> mapping}
@@ -84,9 +82,11 @@ for key in model.state_dict().keys():
 	if not layer_name in SHOWN_LAYER_WEIGHTS:
 		continue
 	print("Processing layer:", key)
-	prev_layer_mapping_id = SHOWN_LAYER_WEIGHTS[layer_name][1]\
-		.replace('current', '.'.join(layer_num_array))\
-		.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
+	prev_layer_mapping_id = SHOWN_LAYER_WEIGHTS[layer_name][1]
+	if prev_layer_mapping_id is not None:
+		prev_layer_mapping_id = prev_layer_mapping_id\
+			.replace('current', '.'.join(layer_num_array))\
+			.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
 	mappings['.'.join(['.'.join(layer_num_array), SHOWN_LAYER_WEIGHTS[layer_name][0]])] = gen_mappings(
 		in_weights=model.state_dict()[key].detach().cpu().numpy(),
 		prev_layer_mapping=mappings.get(prev_layer_mapping_id, None)
