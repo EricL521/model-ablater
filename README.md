@@ -1,8 +1,8 @@
-# AI Model Lobotomizer
-A program that allows you to perform lobotomy on an AI model
+# AI Model Ablator
+A program that allows you to ablate and inspect AI models easily
   - I'm envisioning that this would render the value of all the nodes upon giving a model a prompt, and then allow you to weaken the weights that result in the nodes being "activated"
 
-## **NOTE: Currently, this has only been tested on Linux with ROCm (AMD)**
+## **NOTE: Currently, this has only been tested on Llama 3.2-3B-Instruct**
 
 ## Setup
 Guide to installing repository and required packages
@@ -14,12 +14,12 @@ Guide to installing repository and required packages
 - Clone repository
 
   ```bash
-  git clone https://github.com/EricL521/model-lobotomizer.git
+  git clone https://github.com/EricL521/model-ablater.git
   ```
 - Enter newly created folder
   
   ```bash
-  cd model-lobotomizer
+  cd model-ablater
   ```
 - Create Python virtual environment
   
@@ -52,4 +52,22 @@ Guide to installing repository and required packages
   - First argument is Hugging Face repo, and second argument is folder name (will download into models directory)
   ```bash
   python install.py "google-t5/t5-small" "t5-small"
+  ```
+### Generating Images
+NOTE: Add `-h` option to any script for more info
+  - Generate the tensors from a sample text
+  ```bash
+  python get_tensors.py
+  ```
+  - Generate mappings (optional)
+  ```bash
+  python gen_mappings.py
+  ```
+  - Generate images
+  ```bash
+  python gen_images.py
+  ```
+  - View activations
+  ```bash
+  python view_activations.py
   ```
