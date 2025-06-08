@@ -52,9 +52,9 @@ model = model.to(device if torch.cuda.is_available() else "cpu")
 import numpy as np
 from helper_functions.apply_mapping import apply_mapping
 SHOWN_LAYER_WEIGHTS = {
-	"attn.W_Q": ("attn.hook_q", "prev.mlp.W_out"), 
-	"attn._W_K": ("attn.hook_k", "prev.mlp.W_out"),
-	"attn._W_V": ("attn.hook_v", "prev.mlp.W_out"),
+	"attn.W_Q": ("attn.hook_q", None), 
+	"attn._W_K": ("attn.hook_k", None),
+	"attn._W_V": ("attn.hook_v", None),
 	"mlp.W_in": ("mlp.hook_pre_linear", None), 
 }
 # Format of a mapping is [[old index -> new index]]
