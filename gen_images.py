@@ -27,7 +27,7 @@ activations = torch.load(local_dir / 'activations.pt', weights_only=False)
 # 	'blocks.0.attn.hook_k', 'blocks.0.attn.hook_v', 'blocks.0.attn.hook_rot_q', 'blocks.0.attn.hook_rot_k', 
 # 	'blocks.0.attn.hook_attn_scores', 'blocks.0.attn.hook_pattern', 'blocks.0.attn.hook_z', 'blocks.0.hook_attn_out', 
 # 	'blocks.0.hook_resid_mid', 'blocks.0.ln2.hook_scale', 'blocks.0.ln2.hook_normalized', 'blocks.0.mlp.hook_pre', 
-# 	'blocks.0.mlp.hook_pre_linear', 'blocks.0.hook_mlp_out', 'blocks.0.hook_mlp_out', 'blocks.0.hook_resid_post', 
+# 	'blocks.0.mlp.hook_pre_linear', 'blocks.0.mlp.hook_post', 'blocks.0.hook_mlp_out', 'blocks.0.hook_resid_post', 
 # 	... a lot of layers, ... blocks.27.hook_resid_post', 'ln_final.hook_scale', 'ln_final.hook_normalized']
 
 # NOTE: in the following logs, n is the number of tokens in the input text
