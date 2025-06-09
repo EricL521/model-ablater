@@ -268,7 +268,7 @@ class LayerViewer:
 
 			# Update status
 			self.status_label.config(
-				text=f"Token {self.token_num} of {len(self.activation_files)} | Zoom: {self.zoom_level:.2f}x | Size: {self.current_image.width}x{self.current_image.height}"
+				text=f"Token {self.token_num} of {len(self.activation_files) - 1} | Zoom: {self.zoom_level:.2f}x | Size: {self.current_image.width}x{self.current_image.height}"
 			)
 			
 			# Update cache with current settings
