@@ -7,7 +7,6 @@ def unmap_position(mapped_position, mapping, np_array_shape):
 				return (0, j)
 		return None
 	# there is more than one mapping, and it is an attention layer
-	print(np_array_shape[1], mapping.shape[0])
 	for j in range(mapping.shape[1]):
 		if mapping[mapped_position[1] // (np_array_shape[1] // mapping.shape[0]), j] == mapped_position[2]:
 			return (mapped_position[0], mapped_position[1], j)
