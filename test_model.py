@@ -3,6 +3,7 @@ import torch
 import transformer_lens
 import transformers
 import argparse
+import numpy as np
 
 # For detailed logs (INFO level)
 transformers.logging.set_verbosity_info()
@@ -42,12 +43,15 @@ model = transformer_lens.HookedTransformer.from_pretrained(
 )
 del hf_model
 model = model.to(device if torch.cuda.is_available() else "cpu")
-model.run_with_hooks(return_type=['logits'])
 
 def gen_head_ablation_hook(head_index_to_ablate):
 	def head_ablation_hook(value, hook):
-		print(f"Shape of the value tensor: {value.shape}")
-		value[:, :, head_index_to_ablate] = 0.
+		# print(f"Shape of the value tensor: {value.shape}")
+		if isinstance(head_index_to_ablate, int) or len(head_index_to_ablate) == 1:
+			value[:, :, head_index_to_ablate] = 0.
+		else:
+			# print(head_index_to_ablate)
+			value[:, head_index_to_ablate[0], head_index_to_ablate[1]] = 0.
 		return value
 	return head_ablation_hook
 
@@ -61,8 +65,13 @@ def run_model(model, text, ablate_indices=None):
 	)
 	token_ids = logits.argmax(dim=-1)
 	output_text = model.to_str_tokens(token_ids)
-	return output_text, loss
+	input_text = model.to_str_tokens(tokens)
+	return input_text, output_text, loss
 
 # Test with blocking:
 # (blocks.12.hook_mlp_out, 3039)
-print(run_model(model, text, [("blocks.12.hook_mlp_out", 3039)]))
+# print(run_model(model, text, [("blocks.12.hook_mlp_out", 3039)]))
+
+# Load selected activations
+selected_activations = {eval(k): v for k, v in np.load(local_dir / 'selected_activations.npz', allow_pickle=True).items()}
+print(run_model(model, text, selected_activations.keys()))
