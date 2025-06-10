@@ -6,6 +6,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 import numpy as np
 import os
+import transformers
 from helper_functions.shown_layers import SHOWN_LAYERS
 from helper_functions.apply_mapping import apply_mapping
 
@@ -23,6 +24,14 @@ local_dir = Path('.') / 'models' / model_id
 print("model_id:", model_id)
 print("show_values:", show_values)
 print("do_mapping:", do_mapping)
+
+# Load tokenizer to decode tokens
+tokenizer = transformers.AutoTokenizer.from_pretrained(local_dir)
+tokens = torch.load(local_dir / 'tokens.pt')
+# Process tokens to get text
+token_text = tokenizer.convert_ids_to_tokens(tokens[0])
+del tokenizer
+del tokens
 
 # Show activations
 ACTIVATIONS_FOLDER = local_dir / 'activations'
@@ -264,11 +273,11 @@ class LayerViewer:
 			self.token_num = int(self.activation_files[self.current_index].split('_')[1].split('.')[0])
 
 			# Update image title at the top
-			self.title_label.config(text=f"Token {self.token_num}")
+			self.title_label.config(text=f"Token {self.token_num} ({token_text[self.token_num]}) of {len(self.activation_files) - 1}")
 
 			# Update status
 			self.status_label.config(
-				text=f"Token {self.token_num} of {len(self.activation_files) - 1} | Zoom: {self.zoom_level:.2f}x | Size: {self.current_image.width}x{self.current_image.height}"
+				text=f"Size: {self.current_image.width}x{self.current_image.height} | Zoom: {self.zoom_level:.2f}x"
 			)
 			
 			# Update cache with current settings

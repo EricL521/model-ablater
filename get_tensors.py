@@ -83,5 +83,6 @@ if do_calc:
   print(logits, activations)
 
   # save the model history to files
+  torch.save(tokens, local_dir / 'tokens.pt')
   torch.save(logits, local_dir / 'logits.pt')
   torch.save(activations, local_dir / 'activations.pt')
