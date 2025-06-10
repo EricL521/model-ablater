@@ -117,6 +117,16 @@ class LayerViewer:
 		self.next_button.bind("<ButtonPress-1>", self.start_continuous_next)
 		self.next_button.bind("<ButtonRelease-1>", self.stop_continuous_scroll)
 		
+		# Add save, load, and clear buttons
+		self.save_button = ttk.Button(self.button_frame, text="Save Selections", command=self.save_selections)
+		self.save_button.pack(side=tk.LEFT, padx=5)
+		
+		self.load_button = ttk.Button(self.button_frame, text="Load Selections", command=self.load_selections)
+		self.load_button.pack(side=tk.LEFT, padx=5)
+		
+		self.clear_button = ttk.Button(self.button_frame, text="Clear Selections", command=self.clear_selections)
+		self.clear_button.pack(side=tk.LEFT, padx=5)
+		
 		# Create status label
 		self.status_label = ttk.Label(self.main_frame, text="")
 		self.status_label.pack(fill=tk.X, pady=5)
@@ -133,6 +143,9 @@ class LayerViewer:
 		self.canvas.bind("<ButtonRelease-1>", self.stop_pan)
 		self.canvas.bind("<B1-Motion>", self.pan)
 		self.canvas.bind("<Motion>", self.update_pixel_info)
+
+		# Save the position indices of selected activations (selected by clicking)
+		self.selected_activations = dict() # (layer, position) -> (image_x, image_y)
 		
 		# Bind arrow keys
 		self.root.bind("<Left>", lambda e: self.show_previous())
@@ -217,8 +230,16 @@ class LayerViewer:
 		# Convert to image coordinates
 		image_x = int(np.floor((mouse_x - self.pan_x) / self.zoom_level))
 		image_y = int(np.floor((mouse_y - self.pan_y) / self.zoom_level))
-		print(f"Clicked at ({image_x}, {image_y})")
+
+		layer_start_x, current_layer, act_np = self.get_layer(image_x)
+		position, value = self.get_position(layer_start_x, current_layer, act_np, image_x, image_y)
+
+		if (current_layer, position) in self.selected_activations:
+			del self.selected_activations[(current_layer, position)]
+		elif value is not None:
+			self.selected_activations[(current_layer, position)] = (image_x, image_y)
 		
+		self.show_current_activation()
 
 	def zoom(self, event):
 		# Get mouse position relative to canvas
@@ -354,6 +375,26 @@ class LayerViewer:
 			# Display new image
 			self.canvas.create_image(x, y, image=photo, anchor=tk.NW)
 			self.canvas.image = photo  # Keep a reference
+
+			# Draw selected activations over the image by creating a new PIL image and drawing blue pixels
+			selection_overlay_image = Image.new('RGBA', (self.current_image.width, self.current_image.height), (0, 0, 0, 0))
+			selection_overlay_pixels = selection_overlay_image.load()
+
+			for (layer, position), (image_x, image_y) in self.selected_activations.items():
+				selection_overlay_pixels[image_x, image_y] = (0, 0, 255, 100)
+			# Resize the selection overlay to match the visible region
+			selection_overlay_image = selection_overlay_image.crop((
+				int(visible_left),
+				int(visible_top),
+				int(visible_right),
+				int(visible_bottom)
+			))
+			selection_overlay_image = selection_overlay_image.resize((new_width, new_height), Image.Resampling.NEAREST)
+
+			# Draw the selection overlay on the resized region
+			selection_overlay_photo = ImageTk.PhotoImage(selection_overlay_image)
+			self.canvas.create_image(x, y, image=selection_overlay_photo, anchor=tk.NW)
+			self.canvas.selection_overlay_image = selection_overlay_photo  # Keep a reference
 		except Exception as e:
 			self.status_label.config(text=f"Error displaying activation: {str(e)}")
 	
@@ -403,7 +444,7 @@ class LayerViewer:
 		
 		# Schedule next scroll
 		self.root.after(self.scroll_interval, self.continuous_scroll)
-	
+ 
 	# returns layer_start_x, current_layer, act_np (WITHOUT MAPPING)
 	def get_layer(self, image_x):
 		# Calculate which layer we're in based on x position
@@ -532,6 +573,35 @@ class LayerViewer:
 			self.pixel_info_label.config(text=info)
 		else:
 			self.pixel_info_label.config(text="")
+
+	def save_selections(self):
+		try:
+			# Convert tuple keys to strings for saving
+			save_dict = {str(k): v for k, v in self.selected_activations.items()}
+			np.savez(local_dir / 'selected_activations.npz', **save_dict)
+			self.status_label.config(text="Selections saved successfully")
+		except Exception as e:
+			self.status_label.config(text=f"Error saving selections: {str(e)}")
+
+	def load_selections(self):
+		try:
+			file_path = local_dir / 'selected_activations.npz'
+			if not file_path.exists():
+				self.status_label.config(text="No saved selections found")
+				return
+			
+			loaded = np.load(file_path, allow_pickle=True)
+			# Convert string keys back to tuples
+			self.selected_activations = {eval(k): v for k, v in loaded.items()}
+			self.status_label.config(text="Selections loaded successfully")
+			self.show_current_activation()  # Refresh the display
+		except Exception as e:
+			self.status_label.config(text=f"Error loading selections: {str(e)}")
+
+	def clear_selections(self):
+		self.selected_activations.clear()
+		self.status_label.config(text="Selections cleared")
+		self.show_current_activation()  # Refresh the display
 
 if __name__ == "__main__":
 	root = tk.Tk()
