@@ -106,26 +106,41 @@ class LayerViewer:
 		self.button_frame = ttk.Frame(self.main_frame)
 		self.button_frame.pack(fill=tk.X, pady=5)
 		
+		# Create top row for navigation buttons
+		self.top_button_frame = ttk.Frame(self.button_frame)
+		self.top_button_frame.pack(fill=tk.X, pady=(0, 5))
+		
 		# Create navigation buttons
-		self.prev_button = ttk.Button(self.button_frame, text="Previous Token", command=self.show_previous)
+		self.prev_button = ttk.Button(self.top_button_frame, text="Previous Token", command=self.show_previous)
 		self.prev_button.pack(side=tk.LEFT, padx=5)
 		self.prev_button.bind("<ButtonPress-1>", self.start_continuous_prev)
 		self.prev_button.bind("<ButtonRelease-1>", self.stop_continuous_scroll)
 		
-		self.next_button = ttk.Button(self.button_frame, text="Next Token", command=self.show_next)
+		self.next_button = ttk.Button(self.top_button_frame, text="Next Token", command=self.show_next)
 		self.next_button.pack(side=tk.RIGHT, padx=5)
 		self.next_button.bind("<ButtonPress-1>", self.start_continuous_next)
 		self.next_button.bind("<ButtonRelease-1>", self.stop_continuous_scroll)
 		
+		# Create bottom row for selection buttons
+		self.bottom_button_frame = ttk.Frame(self.button_frame)
+		self.bottom_button_frame.pack(fill=tk.X)
+		
+		# Create center frame for selection buttons
+		self.selection_center_frame = ttk.Frame(self.bottom_button_frame)
+		self.selection_center_frame.pack(expand=True)
+		
 		# Add save, load, and clear buttons
-		self.save_button = ttk.Button(self.button_frame, text="Save Selections", command=self.save_selections)
+		self.save_button = ttk.Button(self.selection_center_frame, text="Save Selections", command=self.save_selections)
 		self.save_button.pack(side=tk.LEFT, padx=5)
 		
-		self.load_button = ttk.Button(self.button_frame, text="Load Selections", command=self.load_selections)
+		self.load_button = ttk.Button(self.selection_center_frame, text="Load Selections", command=self.load_selections)
 		self.load_button.pack(side=tk.LEFT, padx=5)
 		
-		self.clear_button = ttk.Button(self.button_frame, text="Clear Selections", command=self.clear_selections)
+		self.clear_button = ttk.Button(self.selection_center_frame, text="Clear Selections", command=self.clear_selections)
 		self.clear_button.pack(side=tk.LEFT, padx=5)
+
+		self.next_selection_button = ttk.Button(self.selection_center_frame, text="Next Selection", command=self.cycle_selection)
+		self.next_selection_button.pack(side=tk.LEFT, padx=5)
 		
 		# Create status label
 		self.status_label = ttk.Label(self.main_frame, text="")
@@ -146,6 +161,7 @@ class LayerViewer:
 
 		# Save the position indices of selected activations (selected by clicking)
 		self.selected_activations = dict() # (layer, position) -> (image_x, image_y)
+		self.current_selection_index = 0  # Index for cycling through selections
 		
 		# Bind arrow keys
 		self.root.bind("<Left>", lambda e: self.show_previous())
@@ -172,6 +188,9 @@ class LayerViewer:
 			self.show_current_activation()
 		else:
 			self.status_label.config(text="No activation images found in the folder")
+		
+		# Try to load saved selections if they exist
+		self.load_selections()
 	
 	def on_window_resize(self, event):
 		canvas_width = self.canvas.winfo_width()
@@ -225,6 +244,9 @@ class LayerViewer:
 			self.show_current_activation()
 	
 	def on_click(self, event):
+		if not show_values:
+			return
+ 
 		mouse_x = self.canvas.canvasx(event.x)
 		mouse_y = self.canvas.canvasy(event.y)
 		# Convert to image coordinates
@@ -600,8 +622,31 @@ class LayerViewer:
 
 	def clear_selections(self):
 		self.selected_activations.clear()
+		self.current_selection_index = 0
 		self.status_label.config(text="Selections cleared")
 		self.show_current_activation()  # Refresh the display
+
+	def cycle_selection(self):
+		if not self.selected_activations:
+			self.status_label.config(text="No selections to cycle through")
+			return
+		
+		# Get canvas dimensions
+		canvas_width = self.canvas.winfo_width()
+		canvas_height = self.canvas.winfo_height()
+		
+		# Get the next selection
+		selections = list(self.selected_activations.values())
+		image_x, image_y = selections[self.current_selection_index]
+		
+		# Update index for next time
+		self.current_selection_index = (self.current_selection_index + 1) % len(selections)
+		
+		# Center on the selection
+		self.pan_x = canvas_width/2 - image_x * self.zoom_level
+		self.pan_y = canvas_height/2 - image_y * self.zoom_level
+		self.show_current_activation()
+		self.status_label.config(text=f"Centered on selection {self.current_selection_index + 1}/{len(selections)} at ({image_x}, {image_y})")
 
 if __name__ == "__main__":
 	root = tk.Tk()
