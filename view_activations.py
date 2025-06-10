@@ -8,7 +8,7 @@ import numpy as np
 import os
 import transformers
 from helper_functions.shown_layers import SHOWN_LAYERS
-from helper_functions.apply_mapping import apply_mapping
+from helper_functions.unmap_position import unmap_position
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
@@ -18,7 +18,7 @@ parser.add_argument('--mapping', action=argparse.BooleanOptionalAction, default=
 args = parser.parse_args()
 model_id = args.model_id
 show_values = args.show_values
-do_mapping = args.mapping
+do_mapping = args.show_values and args.mapping
 local_dir = Path('.') / 'models' / model_id
 
 print("model_id:", model_id)
@@ -49,6 +49,8 @@ if show_values and do_mapping:
 		mappings = np.load(local_dir / 'mappings.npz', allow_pickle=True)
 	except Exception as e:
 		print(f"Warning: Could not load mappings.npz: {e}")
+
+CLICK_DISTANCE_THRESHOLD = 2  # pixels to consider a click vs drag
 
 class LayerViewer:
 	def __init__(self, root, activation_folder):
@@ -188,11 +190,15 @@ class LayerViewer:
 	
 	def start_pan(self, event):
 		self.is_panning = True
+		self.total_distance = 0
 		self.last_x = event.x
 		self.last_y = event.y
 	
 	def stop_pan(self, event):
 		self.is_panning = False
+		if self.total_distance < CLICK_DISTANCE_THRESHOLD:
+			# If the total distance moved is less than the threshold, treat it as a click
+			self.on_click(event)
 	
 	def pan(self, event):
 		if self.is_panning:
@@ -202,8 +208,18 @@ class LayerViewer:
 			self.pan_y += dy
 			self.last_x = event.x
 			self.last_y = event.y
+			self.total_distance += dx**2 + dy**2
 			self.show_current_activation()
 	
+	def on_click(self, event):
+		mouse_x = self.canvas.canvasx(event.x)
+		mouse_y = self.canvas.canvasy(event.y)
+		# Convert to image coordinates
+		image_x = int(np.floor((mouse_x - self.pan_x) / self.zoom_level))
+		image_y = int(np.floor((mouse_y - self.pan_y) / self.zoom_level))
+		print(f"Clicked at ({image_x}, {image_y})")
+		
+
 	def zoom(self, event):
 		# Get mouse position relative to canvas
 		mouse_x = self.canvas.canvasx(event.x)
@@ -387,6 +403,104 @@ class LayerViewer:
 		
 		# Schedule next scroll
 		self.root.after(self.scroll_interval, self.continuous_scroll)
+	
+	# returns layer_start_x, current_layer, act_np (WITHOUT MAPPING)
+	def get_layer(self, image_x):
+		# Calculate which layer we're in based on x position
+		# Each layer takes up its width + 1 pixel for spacing
+		layer_start_x = 0
+		layer_width = 0
+		current_layer = None
+		
+		image_height = self.current_image.height
+		for key in self.activations.keys():
+			layer_num_array = key.split('.')[:2:]
+			layer_name = '.'.join(key.split('.')[2::])
+			if not (layer_name in SHOWN_LAYERS or key in SHOWN_LAYERS):
+				continue
+			# Get activation shape for this layer
+			act = self.activations[key]
+			act_np = act.detach().cpu().numpy()
+			if act_np.shape[0] == 1:
+				act_np = act_np[0]
+			
+			# Calculate width of this layer's visualization
+			if act_np.ndim == 2:
+				# 2D: (tokens, d_model)
+				# Width is d_model, which is the second dimension
+				layer_width += act_np.shape[1] // image_height
+			elif act_np.ndim == 3 and act_np.shape[1] == len(self.activation_files) and act_np.shape[2] == len(self.activation_files):
+				# 3D: (heads, tokens, tokens)
+				layer_width += act_np.shape[1]
+			elif act_np.ndim == 3:
+				# 3D: (tokens, heads, d_head)
+				# Width is d_head, which is the third dimension
+				layer_width += act_np.shape[2] // image_height * act_np.shape[1]
+			
+			# Add spacing
+			layer_width += 1
+			
+			if image_x < layer_width:
+				current_layer = key
+				break
+			else:
+				layer_start_x = layer_width
+		
+		return layer_start_x, current_layer, act_np
+
+	# Returns position within layer of the given coordinates and the value, or "(spacing)", None if it's on the spacing pixel
+	def get_position(self, layer_start_x, current_layer, act_np, image_x, image_y):
+		image_height = self.current_image.height
+		if do_mapping:
+			mapping_id = None
+			layer_num_array = current_layer.split('.')[:2:]
+			layer_name = '.'.join(current_layer.split('.')[2::])
+			shown_layer_key = current_layer if current_layer in SHOWN_LAYERS else layer_name
+			if isinstance(SHOWN_LAYERS[shown_layer_key], str):
+				mapping_id = SHOWN_LAYERS[shown_layer_key]\
+					.replace('current', '.'.join(layer_num_array))\
+					.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
+			mapping = self.mappings.get(mapping_id, None)
+		# Calculate position within the layer
+		if act_np.ndim == 2:
+			relative_x = image_x - layer_start_x
+
+			if relative_x == act_np.shape[1] // image_height:
+				return "(spacing)", None
+			else:
+				# 2D: (tokens, d_model)
+				position = (self.token_num, relative_x * image_height + image_y)
+				if do_mapping and mapping is not None:
+					position = unmap_position(position, mapping, act_np.shape)
+				value = act_np[position]
+				return position, value
+		elif act_np.ndim == 3 and act_np.shape[1] == len(self.activation_files) and act_np.shape[2] == len(self.activation_files):
+			layer_start_y = (image_height - act_np.shape[0]) // 2
+			relative_x = image_x - layer_start_x
+			relative_y = image_y - layer_start_y
+			if relative_x == act_np.shape[1] or relative_y < 0 or relative_y >= act_np.shape[0]:
+				return "(spacing)", None
+			else:
+				# 3D: (heads, tokens, tokens)
+				position = (relative_y, self.token_num, relative_x)
+				if do_mapping and mapping is not None:
+					position = unmap_position(position, mapping, act_np.shape)
+				value = act_np[position]
+				return position, value
+		elif act_np.ndim == 3:
+			relative_x = image_x - layer_start_x
+
+			if relative_x == act_np.shape[2] // image_height * act_np.shape[1]:
+				return "(spacing)", None
+			else:
+				# 3D: (tokens, heads, d_head)
+				head_idx = relative_x // (act_np.shape[2] // image_height)
+				d_head_idx = (image_y * (act_np.shape[2] // image_height)) + (relative_x % (act_np.shape[2] // image_height))
+				position = (self.token_num, head_idx, d_head_idx)
+				if do_mapping and mapping is not None:
+					position = unmap_position(position, mapping, act_np.shape)
+				value = act_np[position]
+				return position, value
 
 	def update_pixel_info(self, event):
 		if not self.current_image or not self.show_values:
@@ -404,99 +518,15 @@ class LayerViewer:
 		if 0 <= image_x < self.current_image.width and 0 <= image_y < image_height:
 			info = ""
 			try:
-				# Calculate which layer we're in based on x position
-				# Each layer takes up its width + 1 pixel for spacing
-				layer_width = 0
-				current_layer = None
+				layer_start_x, current_layer, act_np = self.get_layer(image_x)
+				info = f"Layer: {current_layer}"
+
+				position, value = self.get_position(layer_start_x, current_layer, act_np, image_x, image_y)
+				if value is None:
+					info = " | ".join([info, position])
+				else:
+					info = " | ".join([info, f"Position: {position}", f"Value: {value:.4f}"])
 				
-				for key in self.activations.keys():
-					layer_num_array = key.split('.')[:2:]
-					layer_name = '.'.join(key.split('.')[2::])
-					if not (layer_name in SHOWN_LAYERS or key in SHOWN_LAYERS):
-						continue
-					# Get activation shape for this layer
-					act = self.activations[key]
-					act_np = act.detach().cpu().numpy()
-					if act_np.shape[0] == 1:
-						act_np = act_np[0]
-					
-					# Calculate width of this layer's visualization
-					if act_np.ndim == 2:
-						# 2D: (tokens, d_model)
-						# Width is d_model, which is the second dimension
-						layer_width += act_np.shape[1] // image_height
-					elif act_np.ndim == 3 and act_np.shape[1] == len(self.activation_files) and act_np.shape[2] == len(self.activation_files):
-						# 3D: (heads, tokens, tokens)
-						layer_width += act_np.shape[1]
-					elif act_np.ndim == 3:
-						# 3D: (tokens, heads, d_head)
-						# Width is d_head, which is the third dimension
-						layer_width += act_np.shape[2] // image_height * act_np.shape[1]
-					
-					# Add spacing
-					layer_width += 1
-					
-					if image_x < layer_width:
-						current_layer = key
-						break
-				
-				if current_layer is not None:
-					info = f"Layer: {current_layer}"
-					# Get activation for this layer
-					act = self.activations[current_layer]
-					act_np = act.detach().cpu().numpy().copy()
-					if act_np.shape[0] == 1:
-						act_np = act_np[0]
-					if do_mapping:
-						mapping_id = None
-						shown_layer_key = key if key in SHOWN_LAYERS else layer_name
-						if isinstance(SHOWN_LAYERS[shown_layer_key], str):
-							mapping_id = SHOWN_LAYERS[shown_layer_key]\
-								.replace('current', '.'.join(layer_num_array))\
-								.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
-						mapping = self.mappings.get(mapping_id, None)
-						if mapping is not None:
-							for i in range(act_np.shape[0]):
-								act_np[i] = apply_mapping(act_np[i], mapping)
-     
-					# Calculate position within the layer
-					layer_start_x = layer_width - 1
-					if act_np.ndim == 2:
-						layer_start_x -= act_np.shape[1] // image_height
-						relative_x = image_x - layer_start_x
-      
-						if relative_x == act_np.shape[1] // image_height:
-							info = " | ".join([info, "(spacing)"])
-						else:
-							# 2D: (tokens, d_model)
-							position = (self.token_num, relative_x * image_height + image_y)
-							value = act_np[position]
-							info = " | ".join([info, f"Position: {position}",  f"Value: {value:.4f}"])
-					elif act_np.ndim == 3 and act_np.shape[1] == len(self.activation_files) and act_np.shape[2] == len(self.activation_files):
-						layer_start_x -= act_np.shape[1]
-						layer_start_y = (image_height - act_np.shape[0]) // 2
-						relative_x = image_x - layer_start_x
-						relative_y = image_y - layer_start_y
-						if relative_x == act_np.shape[1] or relative_y < 0 or relative_y >= act_np.shape[0]:
-							info = " | ".join([info, "(spacing)"])
-						else:
-							# 3D: (heads, tokens, tokens)
-							position = (relative_y, self.token_num, relative_x)
-							value = act_np[position]
-							info = " | ".join([info, f"Position: {position}",  f"Value: {value:.4f}"])
-					elif act_np.ndim == 3:
-						layer_start_x -= act_np.shape[2] // image_height * act_np.shape[1]
-						relative_x = image_x - layer_start_x
-      
-						if relative_x == act_np.shape[2] // image_height * act_np.shape[1]:
-							info = " | ".join([info, "(spacing)"])
-						else:
-							# 3D: (tokens, heads, d_head)
-							head_idx = relative_x // (act_np.shape[2] // image_height)
-							d_head_idx = (image_y * (act_np.shape[2] // image_height)) + (relative_x % (act_np.shape[2] // image_height))
-							position = (self.token_num, head_idx, d_head_idx)
-							value = act_np[position]
-							info = " | ".join([info, f"Position: {position}",  f"Value: {value:.4f}"])
 			except Exception as e:
 				info = f"Error: {e}"
 			self.pixel_info_label.config(text=info)
