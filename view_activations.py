@@ -13,7 +13,7 @@ from helper_functions.unmap_position import unmap_position
 parser = argparse.ArgumentParser()
 parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
 parser.add_argument('--show-values', action=argparse.BooleanOptionalAction, default=True)
-parser.add_argument('--mapping', action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument('--mapping', action=argparse.BooleanOptionalAction, default=False)
 
 args = parser.parse_args()
 model_id = args.model_id

@@ -5,7 +5,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
 # --no-mapping or --mapping (default)
-parser.add_argument('--mapping', action=argparse.BooleanOptionalAction, default=True)
+parser.add_argument('--mapping', action=argparse.BooleanOptionalAction, default=False)
 args = parser.parse_args()
 model_id = args.model_id
 do_mapping = args.mapping
