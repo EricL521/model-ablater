@@ -51,22 +51,29 @@ def gen_head_ablation_hook(head_index_to_ablate):
 			value[:, :, head_index_to_ablate] = 0.
 		else:
 			# print(head_index_to_ablate)
-			value[:, head_index_to_ablate[0], head_index_to_ablate[1]] = 0.
+			value[:, :, head_index_to_ablate[1]] = 0.
 		return value
 	return head_ablation_hook
 
 # Run model with transformer_lens
-def run_model(model, text, ablate_indices=None):
+def run_model(model, text, ablate_indices=None, num_output_probs=3):
 	# We define a head ablation hook
 	tokens = model.to_tokens(text)
+	input_text = model.to_str_tokens(tokens)
 	logits, loss = model.run_with_hooks(
 		tokens, return_type='both',
 		fwd_hooks=[(x[0], gen_head_ablation_hook(x[1])) for x in ablate_indices] if ablate_indices else []
 	)
-	token_ids = logits.argmax(dim=-1)
-	output_text = model.to_str_tokens(token_ids)
-	input_text = model.to_str_tokens(tokens)
-	return input_text, output_text, loss
+	probs = logits.softmax(dim=-1)
+	top_indices = np.flip(np.argsort(probs.cpu().detach().numpy()), axis=-1)
+	if top_indices.shape[0] == 1:
+		top_indices = top_indices[0]
+	top_indices = top_indices[:, :num_output_probs]
+	output_text = [model.to_str_tokens(top_indices[i]) for i in range(top_indices.shape[0])]
+	# filter probs to only include the top indices
+	probs = probs.squeeze().cpu().detach().numpy()
+	probs = np.take_along_axis(probs, top_indices, axis=-1)
+	return input_text, loss, output_text, probs
 
 # Test with blocking:
 # (blocks.12.hook_mlp_out, 3039)
