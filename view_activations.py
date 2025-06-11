@@ -9,6 +9,7 @@ import os
 import transformers
 from helper_functions.shown_layers import SHOWN_LAYERS
 from helper_functions.unmap_position import unmap_position
+from helper_functions.map_position import map_position
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model-id', type=str, default='meta-llama/Llama-3.2-3B-Instruct')
@@ -466,7 +467,70 @@ class LayerViewer:
 		
 		# Schedule next scroll
 		self.root.after(self.scroll_interval, self.continuous_scroll)
- 
+	
+	# returns image_x and image_y given current_layer, and position within layer (opposite of get_position)
+	def get_image_position(self, current_layer, position):
+		layer_start_x = 0
+
+		for key in self.activations.keys():
+			layer_num_array = key.split('.')[:2:]
+			layer_name = '.'.join(key.split('.')[2::])
+			if not (layer_name in SHOWN_LAYERS or key in SHOWN_LAYERS):
+				continue
+			if key == current_layer:
+				break
+			# Get activation shape for this layer
+			act = self.activations[key]
+			act_np = act.detach().cpu().numpy()
+			if act_np.shape[0] == 1:
+				act_np = act_np[0]
+			
+			# Calculate width of this layer's visualization
+			if act_np.ndim == 2:
+				# 2D: (tokens, d_model)
+				layer_start_x += act_np.shape[1] // self.current_image.height
+			elif act_np.ndim == 3 and act_np.shape[1] == len(self.activation_files) and act_np.shape[2] == len(self.activation_files):
+				# 3D: (heads, tokens, tokens)
+				layer_start_x += act_np.shape[1]
+			elif act_np.ndim == 3:
+				# 3D: (tokens, heads, d_head)
+				layer_start_x += act_np.shape[2] // self.current_image.height * act_np.shape[1]
+			
+			layer_start_x += 1  # Add spacing pixel
+		
+		# Turn position into image_x and image_y
+		image_height = self.current_image.height
+		act_np = self.activations[current_layer].detach().cpu().numpy()
+		if do_mapping:
+			mapping_id = None
+			layer_num_array = current_layer.split('.')[:2:]
+			layer_name = '.'.join(current_layer.split('.')[2::])
+			shown_layer_key = current_layer if current_layer in SHOWN_LAYERS else layer_name
+			if isinstance(SHOWN_LAYERS[shown_layer_key], str):
+				mapping_id = SHOWN_LAYERS[shown_layer_key]\
+					.replace('current', '.'.join(layer_num_array))\
+					.replace('prev', '.'.join([layer_num_array[0], str(int(layer_num_array[1]) - 1)]))
+			mapping = self.mappings.get(mapping_id, None)
+			position = map_position(position, mapping, act_np.shape)
+		if act_np.shape[0] == 1:
+			act_np = act_np[0]
+		
+		if act_np.ndim == 2:
+			relative_x = position[1] // image_height
+			image_x = layer_start_x + relative_x
+			image_y = position[1] % image_height
+			return (image_x, image_y)
+		elif act_np.ndim == 3 and act_np.shape[1] == len(self.activation_files) and act_np.shape[2] == len(self.activation_files):
+			layer_start_y = (image_height - act_np.shape[0]) // 2
+			image_x = layer_start_x + position[2]
+			image_y = layer_start_y + position[0]
+			return (image_x, image_y)
+		elif act_np.ndim == 3:
+			image_y = position[2] % image_height
+			relative_x = position[1] * (act_np.shape[2] // image_height) + position[2] // image_height
+			image_x = layer_start_x + relative_x
+			return (image_x, image_y)
+
 	# returns layer_start_x, current_layer, act_np (WITHOUT MAPPING)
 	def get_layer(self, image_x):
 		# Calculate which layer we're in based on x position
@@ -558,7 +622,7 @@ class LayerViewer:
 			else:
 				# 3D: (tokens, heads, d_head)
 				head_idx = relative_x // (act_np.shape[2] // image_height)
-				d_head_idx = (image_y * (act_np.shape[2] // image_height)) + (relative_x % (act_np.shape[2] // image_height))
+				d_head_idx = image_y + (image_height * (relative_x % (act_np.shape[2] // image_height)))
 				position = (self.token_num, head_idx, d_head_idx)
 				if do_mapping and mapping is not None:
 					position = unmap_position(position, mapping, act_np.shape)
@@ -614,7 +678,7 @@ class LayerViewer:
 			
 			loaded = np.load(file_path, allow_pickle=True)
 			# Convert string keys back to tuples
-			self.selected_activations = {eval(k): v for k, v in loaded.items()}
+			self.selected_activations = {eval(k): self.get_image_position(eval(k)[0], eval(k)[1]) for k, v in loaded.items()}
 			self.status_label.config(text="Selections loaded successfully")
 			self.show_current_activation()  # Refresh the display
 		except Exception as e:
