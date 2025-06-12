@@ -48,10 +48,15 @@ def gen_head_ablation_hook(head_index_to_ablate):
 	def head_ablation_hook(value, hook):
 		# print(f"Shape of the value tensor: {value.shape}")
 		if isinstance(head_index_to_ablate, int) or len(head_index_to_ablate) == 1:
-			value[:, :, head_index_to_ablate] = 0.
+			if value.ndim == 3:
+				value[:, :, head_index_to_ablate] = 0.
+			elif value.ndim == 4:
+				value[:, :, :, head_index_to_ablate] = 0.
 		else:
-			# print(head_index_to_ablate)
-			value[:, :, head_index_to_ablate[1]] = 0.
+			if value.ndim == 3:
+				value[:, :, head_index_to_ablate[1]] = 0.
+			elif value.ndim == 4:
+				value[:, :, :, head_index_to_ablate[1]] = 0.
 		return value
 	return head_ablation_hook
 
