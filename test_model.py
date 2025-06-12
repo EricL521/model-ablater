@@ -46,17 +46,11 @@ model = model.to(device if torch.cuda.is_available() else "cpu")
 
 def gen_head_ablation_hook(head_index_to_ablate):
 	def head_ablation_hook(value, hook):
-		# print(f"Shape of the value tensor: {value.shape}")
+		# print(f"Shape of the value tensor: {value.shape}, head_index_to_ablate: {head_index_to_ablate}")
 		if isinstance(head_index_to_ablate, int) or len(head_index_to_ablate) == 1:
-			if value.ndim == 3:
-				value[:, :, head_index_to_ablate] = 0.
-			elif value.ndim == 4:
-				value[:, :, :, head_index_to_ablate] = 0.
+			value[:, :, head_index_to_ablate] = 0.
 		else:
-			if value.ndim == 3:
-				value[:, :, head_index_to_ablate[1]] = 0.
-			elif value.ndim == 4:
-				value[:, :, :, head_index_to_ablate[1]] = 0.
+			value[:, :, head_index_to_ablate[0], head_index_to_ablate[1]] = 0.
 		return value
 	return head_ablation_hook
 
@@ -85,5 +79,5 @@ def run_model(model, text, ablate_indices=None, num_output_probs=3):
 # print(run_model(model, text, [("blocks.12.hook_mlp_out", 3039)]))
 
 # Load selected activations
-selected_activations = {eval(k): v for k, v in np.load(local_dir / 'selected_activations.npz', allow_pickle=True).items()}
-print(run_model(model, text, selected_activations.keys()))
+selected_activations = [eval(k) for k in np.load(local_dir / 'selected_activations.npy')]
+print(run_model(model, text, selected_activations))
