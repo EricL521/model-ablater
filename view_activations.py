@@ -256,6 +256,8 @@ class LayerViewer:
 
 		layer_start_x, current_layer, act_np = self.get_layer(image_x)
 		position, value = self.get_position(layer_start_x, current_layer, act_np, image_x, image_y)
+		# Strip token number from position
+		position = position[1:]
 
 		if (current_layer, position) in self.selected_activations:
 			del self.selected_activations[(current_layer, position)]
@@ -663,22 +665,22 @@ class LayerViewer:
 	def save_selections(self):
 		try:
 			# Convert tuple keys to strings for saving
-			save_dict = {str(k): v for k, v in self.selected_activations.items()}
-			np.savez(local_dir / 'selected_activations.npz', **save_dict)
+			save_array = [str(k) for k in self.selected_activations.keys()]
+			np.save(local_dir / 'selected_activations.npy', save_array)
 			self.status_label.config(text="Selections saved successfully")
 		except Exception as e:
 			self.status_label.config(text=f"Error saving selections: {str(e)}")
 
 	def load_selections(self):
 		try:
-			file_path = local_dir / 'selected_activations.npz'
+			file_path = local_dir / 'selected_activations.npy'
 			if not file_path.exists():
 				self.status_label.config(text="No saved selections found")
 				return
 			
-			loaded = np.load(file_path, allow_pickle=True)
+			loaded = np.load(file_path)
 			# Convert string keys back to tuples
-			self.selected_activations = {eval(k): self.get_image_position(eval(k)[0], eval(k)[1]) for k, v in loaded.items()}
+			self.selected_activations = {eval(k): self.get_image_position(eval(k)[0], (0,) + eval(k)[1]) for k in loaded}
 			self.status_label.config(text="Selections loaded successfully")
 			self.show_current_activation()  # Refresh the display
 		except Exception as e:
