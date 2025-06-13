@@ -49,9 +49,9 @@ Guide to installing repository and required packages
 - [Activate virtual environment](#python-venv)
 
 ### Installing Models
-  - First argument is Hugging Face repo, and second argument is folder name (will download into models directory)
+  - Hugging Face model will be installed into `./model/model_name`
   ```bash
-  python install.py "google-t5/t5-small" "t5-small"
+  python install.py --model-id "meta-llama/Llama-3.2-3B-Instruct"
   ```
 ### Generating Images
 NOTE: Add `-h` option to any script for more info
@@ -67,7 +67,11 @@ NOTE: Add `-h` option to any script for more info
   ```bash
   python gen_images.py
   ```
-  - View activations
+  - View activations (click on pixels to select them)
   ```bash
   python view_activations.py
+  ```
+  - Run ablated model (selected pixels will be set to 0)
+  ```bash
+  python test_model.py
   ```
