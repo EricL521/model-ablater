@@ -4,6 +4,7 @@ import transformer_lens
 import transformers
 import argparse
 import numpy as np
+from helper_functions.gen_head_ablation_hook import gen_head_ablation_hook
 
 # For detailed logs (INFO level)
 transformers.logging.set_verbosity_info()
@@ -43,16 +44,6 @@ model = transformer_lens.HookedTransformer.from_pretrained(
 )
 del hf_model
 model = model.to(device if torch.cuda.is_available() else "cpu")
-
-def gen_head_ablation_hook(head_index_to_ablate):
-	def head_ablation_hook(value, hook):
-		# print(f"Shape of the value tensor: {value.shape}, head_index_to_ablate: {head_index_to_ablate}")
-		if isinstance(head_index_to_ablate, int) or len(head_index_to_ablate) == 1:
-			value[:, :, head_index_to_ablate] = 0.
-		else:
-			value[:, :, head_index_to_ablate[0], head_index_to_ablate[1]] = 0.
-		return value
-	return head_ablation_hook
 
 # Run model with transformer_lens
 def run_model(model, text, ablate_indices=None, num_output_probs=3):
